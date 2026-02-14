@@ -1,0 +1,29 @@
+FROM docker.io/caddy:2-builder AS builder
+WORKDIR /src
+COPY . .
+RUN xcaddy build \
+    --with github.com/kagescode/caddy-dns-rcodezero=/src \
+    --output /caddy
+
+FROM docker.io/caddy:2
+COPY --from=builder /caddy /usr/bin/caddy
+
+# A Caddyfile that references the provider (won't actually issue certs in this test)
+RUN printf '%s\n' \
+  '{' \
+  '  email test@example.invalid' \
+  '}' \
+  '' \
+  'example.invalid {' \
+  '  tls {' \
+  '    dns rcodezero {' \
+  '      api_token abc123' \
+  '      base_url  https://my.rcodezero.at' \
+  '    }' \
+  '  }' \
+  '  respond "ok"' \
+  '}' \
+  > /tmp/Caddyfile
+
+# Run "caddy adapt" during build; if it fails, build fails.
+RUN caddy adapt --config /tmp/Caddyfile --adapter caddyfile > /tmp/adapted.json
